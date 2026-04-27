@@ -1060,7 +1060,7 @@ end)
 -- Rejoin current server every 1 hour + retry every 5 seconds if needed
 local lastRejoinTime = tick()
 local rejoinInProgress = false
-local REJOIN_INTERVAL = 30000  -- 1 hour
+local REJOIN_INTERVAL = 3600  -- 1 hour
 
 local function attemptRejoin()
     if rejoinInProgress then return end
