@@ -74,9 +74,28 @@ local isAlone = true
 
 local function checkPlayers()
     local others = 0
+    
+    -- Primary: Check real Player objects
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Parent then
             others += 1
+        end
+    end
+    
+    -- Backup: Check for any other characters in workspace
+    if others == 0 then
+        for _, model in ipairs(workspace:GetChildren()) do
+            if model:IsA("Model") 
+               and model ~= character 
+               and model:FindFirstChild("Humanoid") 
+               and model:FindFirstChild("HumanoidRootPart") then
+                
+                local plr = Players:GetPlayerFromCharacter(model)
+                if plr and plr ~= player then
+                    others += 1
+                    break
+                end
+            end
         end
     end
     
@@ -86,7 +105,7 @@ local function checkPlayers()
         isAlone = shouldRun
         
         if isAlone then
-            -- Alone again → Start farming
+            -- Alone again → Resume
             if not STATE.running then
                 guiLog("✅ Server is empty again - Resuming farm", COLORS.green)
                 STATE.running = true
@@ -94,21 +113,25 @@ local function checkPlayers()
                 task.spawn(mainLoop)
             end
         else
-            -- Someone joined → STOP farming immediately
+            -- Someone joined → FORCE STOP everything
             if STATE.running then
-                guiLog("🚫 Other player detected - Stopping farm NOW", COLORS.red)
-                STATE.running = false
-                updateGUI()
+                guiLog("🚫 OTHER PLAYER DETECTED - FORCE STOPPING FARM", COLORS.red)
                 
-                -- Extra force stop for the current loop
+                STATE.running = false
+                
+                -- Immediate force stops
                 pcall(function()
-                    if pathAgent then
-                        pathAgent:Stop()
+                    if pathAgent then pathAgent:Stop() end
+                end)
+                
+                pcall(function()
+                    if humanoid then
+                        humanoid:MoveTo(rootPart.Position)
+                        humanoid.WalkSpeed = 16
                     end
                 end)
-                if humanoid then
-                    humanoid:MoveTo(rootPart.Position)  -- stop movement
-                end
+                
+                updateGUI()
             end
         end
     end
