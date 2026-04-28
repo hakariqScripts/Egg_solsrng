@@ -55,7 +55,7 @@ local Config = {
     AUTO_USE_STRANGE_CONTROLLER = false,
     AUTO_USE_BIOME_RANDOMIZER = false,
     ITEM_USE_INTERVAL = 20,  -- minutes
-    AUTO_REJOIN_MINUTES = 60,        -- 0 = disabled
+    AUTO_REJOIN_MINUTES = 0,        -- 0 = disabled
     REJOIN_AFTER_START = true,      -- Auto enable farm after rejoin
     -- Webhooks
     WEBHOOK_URL = "",
@@ -101,6 +101,8 @@ end
 
 loadConfig()
 -- Always start with farming enabled jigga (:
+-- right after loadConfig()
+Config.AUTO_REJOIN_MINUTES = tonumber(Config.AUTO_REJOIN_MINUTES) or 0
 Config.Enabled = true
 saveConfig()
 warn("[SolsFarm] Config loaded. WEBHOOK_ENABLED = " .. tostring(Config.WEBHOOK_ENABLED))
@@ -1106,6 +1108,94 @@ local function createWebhookInput(yPos, label, configKey, placeholder)
     end)
 end
 
+local function createRejoinMinutesInput(yPos, label, configKey, placeholder)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -10, 0, 52)
+    row.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    row.BorderSizePixel = 0
+    row.ZIndex = 11
+    row.Parent = getTargetCol(yPos)
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -24, 0, 18)
+    lbl.Position = UDim2.new(0, 12, 0, 4)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label
+    lbl.TextColor3 = Color3.fromRGB(140, 140, 170)
+    lbl.TextSize = 10
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 11
+    lbl.Parent = row
+
+    local inputBox = Instance.new("TextBox")
+    inputBox.Size = UDim2.new(1, -24, 0, 24)
+    inputBox.Position = UDim2.new(0, 12, 0, 22)
+    inputBox.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+    inputBox.BorderSizePixel = 0
+
+    -- ✅ Always show as string, store as number
+    inputBox.Text = tostring(Config[configKey] or "")
+
+    inputBox.PlaceholderText = placeholder or "Enter minutes..."
+    inputBox.TextColor3 = Color3.fromRGB(100, 180, 255)
+    inputBox.PlaceholderColor3 = Color3.fromRGB(50, 50, 70)
+    inputBox.TextSize = 9
+    inputBox.Font = Enum.Font.GothamMedium
+    inputBox.TextXAlignment = Enum.TextXAlignment.Left
+    inputBox.ClearTextOnFocus = false
+    inputBox.ZIndex = 12
+    inputBox.Parent = row
+
+    Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 5)
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0, 6)
+    pad.PaddingRight = UDim.new(0, 6)
+    pad.Parent = inputBox
+
+    local statusDot = Instance.new("Frame")
+    statusDot.Size = UDim2.new(0, 7, 0, 7)
+    statusDot.Position = UDim2.new(1, -18, 0, 9)
+    statusDot.BorderSizePixel = 0
+    statusDot.ZIndex = 12
+    statusDot.Parent = row
+    Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
+    -- ✅ helper to update dot color
+    local function updateDot(val)
+        if val and val > 0 then
+            statusDot.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        else
+            statusDot.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        end
+    end
+
+    updateDot(Config[configKey])
+
+    -- ✅ HARD numeric enforcement
+    inputBox:GetPropertyChangedSignal("Text"):Connect(function()
+        inputBox.Text = inputBox.Text:gsub("[^%d]", "") -- remove non-numbers
+    end)
+
+    inputBox.FocusLost:Connect(function()
+        local value = tonumber(inputBox.Text)
+
+        if value then
+            Config[configKey] = value
+        else
+            Config[configKey] = 0
+            inputBox.Text = "0"
+        end
+
+        updateDot(Config[configKey])
+        saveConfig()
+
+        warn("[Settings] " .. configKey .. " =", Config[configKey])
+    end)
+end
+
 createSectionHeader(4, "\u{1F527}  General")
 createSettingsToggle(30, "Abyssal Auto Equip", "AUTO_EQUIP_ABYSSAL")
 createSettingsToggle(72, "Enable Webhooks", "WEBHOOK_ENABLED")
@@ -1117,7 +1207,8 @@ createSettingsToggle(186, "Use Strange Controller", "AUTO_USE_STRANGE_CONTROLLER
 createSettingsToggle(228, "Use Biome Randomizer", "AUTO_USE_BIOME_RANDOMIZER")
 createSettingsSlider(270, "Use Interval (m)", 1, 60, "ITEM_USE_INTERVAL")
 createSettingsSlider(186, "Collect Dist", 2, 12, "PROMPT_DISTANCE")
-createWebhookInput(420, "Auto Rejoin (minutes)", "AUTO_REJOIN_MINUTES", "Enter Rejoin Time...")
+
+createRejoinMinutesInput(420, "Auto Rejoin (minutes)", "AUTO_REJOIN_MINUTES", "Enter Rejoin Time...")
 
 createSectionHeader(232, "\u{2728}  Aura Notifications")
 createSettingsToggle(258, "Aura Roll Alerts", "AURA_NOTIFY_ENABLED")
@@ -3646,64 +3737,37 @@ if Config.Enabled then
 end
 
 ---------------------------------------
--- AUTO REJOIN SYSTEM
+-- SIMPLE AUTO REJOIN
 ---------------------------------------
-local lastRejoinTime = tick()
-local REJOIN_CHECK_INTERVAL = 30  -- check every 30 seconds
 
-local function rejoinServer()
-    if not Config.Enabled then return end
-    
-    guiLog("🔄 Auto Rejoin triggered - Restarting server...", Color3.fromRGB(255, 165, 0))
-    
-    -- Disable farming cleanly
-    Config.Enabled = false
-    if State.FarmThread then
-        pcall(function() task.cancel(State.FarmThread) end)
-    end
-    
-    task.wait(2.5)
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
 
-    local success, err = pcall(function()
-        -- This rejoins the EXACT same server (same JobId)
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
-    end)
-
-    if not success then
-        warn("[Rejoin] Failed: " .. tostring(err))
-        -- Fallback: normal teleport to any server
-        pcall(function()
-            TeleportService:Teleport(game.PlaceId, Player)
-        end)
-    end
-end
-
--- Main rejoin checker
 task.spawn(function()
     while true do
-        task.wait(REJOIN_CHECK_INTERVAL)
-        
-        if Config.AUTO_REJOIN_MINUTES > 0 and Config.Enabled then
-            local timeSinceLast = (tick() - lastRejoinTime) / 60  -- in minutes
-            
-            if timeSinceLast >= Config.AUTO_REJOIN_MINUTES then
-                lastRejoinTime = tick()
-                rejoinServer()
-            end
-        end
-    end
-end)
+        local minutes = tonumber(Config.AUTO_REJOIN_MINUTES) or 0
 
--- Auto-enable farm after script loads or after rejoin
-task.spawn(function()
-    task.wait(4) -- Give time for everything to load
-    if Config.REJOIN_AFTER_START and not Config.Enabled then
-        Config.Enabled = true
-        animateToggle(true)
-        togglePrompts(false)
-        if State.FarmThread then pcall(task.cancel, State.FarmThread) end
-        State.FarmThread = task.spawn(startFarming)
-        warn("[SolsFarm] Auto Farm automatically enabled on startup/rejoin")
+        if Config.Enabled and minutes > 0 then
+            task.wait(minutes * 60)
+
+            local Player = Players.LocalPlayer
+            local PlaceId = game.PlaceId
+            local JobId = game.JobId
+
+            warn("[Rejoin] Rejoining after", minutes, "minutes")
+
+            if #Players:GetPlayers() <= 1 then
+                Player:Kick("Rejoining...")
+                task.wait()
+                TeleportService:Teleport(PlaceId, Player)
+            else
+                pcall(function()
+                    TeleportService:TeleportToPlaceInstance(PlaceId, JobId, Player)
+                end)
+            end
+        else
+            task.wait(5) -- small idle wait if disabled
+        end
     end
 end)
 
