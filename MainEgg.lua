@@ -1055,26 +1055,54 @@ task.spawn(function()
     task.spawn(mainLoop)
 end)
 
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+
+local lastRejoinTime = tick()
+local REJOIN_INTERVAL = 3600  -- 60 minutes
+
+-- Make sure you have a reference to the specific player (usually the local player in a single-player game)
+local player = Players.LocalPlayer or Players:FindFirstChildOfClass("Player") -- adjust if needed
+
+local function guiLog(message, color)
+    -- your existing guiLog function
+    print("[Rejoin]", message) -- fallback
+end
+
+local function checkPlayers()
+    -- your existing checkPlayers() logic
+end
+
+-- Main hourly rejoin loop
 RunService.Heartbeat:Connect(function()
     checkPlayers()
-    
-    -- Hourly rejoin (every 60 minutes) to fix memory leaks
-    if tick() - lastRejoinTime >= 3600 then
-        guiLog("⏰ Hourly rejoin triggered - Restarting server...", COLORS.orange)
+
+    if tick() - lastRejoinTime >= REJOIN_INTERVAL then
+        guiLog("⏰ Hourly rejoin triggered - Restarting to clear memory...", COLORS.orange)
+        
         STATE.running = false
         updateGUI()
-        task.wait(2)  -- Give time to stop cleanly
-        
+
+        task.wait(2.5) -- Give more time for clean shutdown
+
         lastRejoinTime = tick()
-        
-        pcall(function()
-            -- More reliable rejoin method
+
+        -- More reliable rejoin with retry
+        local success, err = pcall(function()
+            -- Teleport to a fresh server of the same place
             TeleportService:TeleportAsync(game.PlaceId, {player})
         end)
+
+        if not success then
+            guiLog("❌ Rejoin failed: " .. tostring(err), COLORS.red)
+            -- Optional: fallback
+            player:Kick("Server restart failed. Please rejoin manually.")
+        end
     end
 end)
 
--- Extra safety: force check every 5 seconds
+-- Extra safety check every 5 seconds
 task.spawn(function()
     while true do
         task.wait(5)
