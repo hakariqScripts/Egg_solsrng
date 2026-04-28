@@ -846,7 +846,7 @@ player.CharacterAdded:Connect(function()
 end)
 
 local function moveToEgg(egg)
-    -- Immediate exit if farm should be stopped
+    -- Stop immediately if farm should not be running
     if not STATE.running then 
         return false 
     end
@@ -856,23 +856,14 @@ local function moveToEgg(egg)
     if not rootPart or not rootPart.Parent then 
         return false 
     end
-    
     if not egg.part or not egg.part.Parent then 
         return false 
     end
-    
     if not pathAgent then
         guiLog("❌ SimplePath not loaded!", COLORS.red)
         return false
     end
 
-    -- Rest of your original code continues here...
-    guiLog("→ Walking to: " .. egg.name, COLORS.accentGlow)
-    
-    if SETTINGS.WALK_SPEED_BOOST > 0 and humanoid then
-        humanoid.WalkSpeed = SETTINGS.WALK_SPEED_BOOST
-    end
-    
     guiLog("→ Walking to: " .. egg.name, COLORS.accentGlow)
 
     if SETTINGS.WALK_SPEED_BOOST > 0 and humanoid then
