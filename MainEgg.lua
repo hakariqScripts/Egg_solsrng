@@ -1040,6 +1040,9 @@ local function mainLoop()
     guiLog("▶ Farming started!", COLORS.green)
 
     while STATE.running do
+        -- Extra safety check at the start of every cycle
+        if not STATE.running then break end
+
         if SETTINGS.AUTO_EQUIP_ABYSSAL then
             if rootPart and rootPart.Parent and not rootPart:FindFirstChild("FishSpin") then
                 autoEquipAbyssal()
@@ -1057,21 +1060,21 @@ local function mainLoop()
         else
             guiLog("Eggs found: " .. #eggs, COLORS.accent)
             for i, egg in ipairs(eggs) do
-                if not STATE.running then break end        -- Important check
+                if not STATE.running then break end   -- Critical check
                 if egg.part and egg.part.Parent then
                     moveToEgg(egg)
                     task.wait(0.3)
                 end
             end
+            if not STATE.running then break end
             task.wait(SETTINGS.SEARCH_INTERVAL)
         end
     end
 
     STATE.currentTarget = "—"
     updateGUI()
-    guiLog("⏸ Farming stopped due to player detection", COLORS.red)
+    guiLog("⏸ Farming stopped (Player detected)", COLORS.red)
 end
-
 -- ==================== AUTO START + SOLO PROTECTION + CURRENT SERVER REJOIN ====================
 
 -- Force auto-start every time the script runs (including after rejoin)
