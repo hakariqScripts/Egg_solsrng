@@ -70,73 +70,20 @@ local STATE = {
 
 local ignoredEggs = setmetatable({}, {__mode = "k"})
 
+-- AUTO FEATURES: Solo protection + Auto start + Hourly rejoin
 local isAlone = true
+local lastRejoinTime = tick()
+
+local isAlone = true
+local lastRejoinTime = tick()
 
 local function checkPlayers()
     local others = 0
-    
-    -- Primary check: Real players
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Parent then
             others += 1
         end
     end
-    
-    -- Backup check: Other characters in workspace
-    if others == 0 then
-        for _, model in ipairs(workspace:GetChildren()) do
-            if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
-                local plr = Players:GetPlayerFromCharacter(model)
-                if plr and plr ~= player then
-                    others += 1
-                    break
-                end
-            end
-        end
-    end
-    
-    local shouldRun = (others == 0)
-    
-    if shouldRun ~= isAlone then
-        isAlone = shouldRun
-        
-        if not shouldRun then
-            -- OTHER PLAYER DETECTED → FORCE STOP
-            guiLog("🚫 OTHER PLAYER DETECTED - FORCE STOPPING FARM", COLORS.red)
-            
-            STATE.running = false
-            
-            pcall(function()
-                if pathAgent then pathAgent:Stop() end
-            end)
-            
-            pcall(function()
-                if humanoid then
-                    humanoid:MoveTo(rootPart.Position)
-                    humanoid.WalkSpeed = 0
-                    humanoid.JumpPower = 0
-                    humanoid.PlatformStand = true
-                end
-            end)
-            
-            updateGUI()
-        else
-            -- Alone again
-            if not STATE.running then
-                guiLog("✅ Server empty again - Resuming farm", COLORS.green)
-                STATE.running = true
-                updateGUI()
-                task.spawn(mainLoop)
-            end
-        end
-    end
-end
-
-game:GetService("LogService").MessageOut:Connect(function(message, messageType)
-    if message:match("Invalid egg") and STATE.currentEggInstance then
-        ignoredEggs[STATE.currentEggInstance] = true
-    end
-end)
     
     local shouldRun = (others == 0)
     
@@ -144,32 +91,18 @@ end)
         isAlone = shouldRun
         
         if isAlone then
-            -- Alone again → Resume
+            -- Became alone → start farming
             if not STATE.running then
-                guiLog("✅ Server is empty again - Resuming farm", COLORS.green)
+                guiLog("✅ Alone in server - Starting farm", COLORS.green)
                 STATE.running = true
                 updateGUI()
                 task.spawn(mainLoop)
             end
         else
-            -- Someone joined → FORCE STOP everything
+            -- Other player detected → stop farming immediately
             if STATE.running then
-                guiLog("🚫 OTHER PLAYER DETECTED - FORCE STOPPING FARM", COLORS.red)
-                
+                guiLog("🚫 Other player detected - Stopping farm", COLORS.red)
                 STATE.running = false
-                
-                -- Immediate force stops
-                pcall(function()
-                    if pathAgent then pathAgent:Stop() end
-                end)
-                
-                pcall(function()
-                    if humanoid then
-                        humanoid:MoveTo(rootPart.Position)
-                        humanoid.WalkSpeed = 16
-                    end
-                end)
-                
                 updateGUI()
             end
         end
@@ -843,19 +776,8 @@ player.CharacterAdded:Connect(function()
 end)
 
 local function moveToEgg(egg)
-    -- Stop immediately if farm should not be running
-    if not STATE.running then 
-        return false 
-    end
-    
     STATE.currentEggInstance = egg.instance
-    
-    if not rootPart or not rootPart.Parent then 
-        return false 
-    end
-    if not egg.part or not egg.part.Parent then 
-        return false 
-    end
+    if not rootPart or not egg.part or not egg.part.Parent then return false end
     if not pathAgent then
         guiLog("❌ SimplePath not loaded!", COLORS.red)
         return false
@@ -1090,9 +1012,6 @@ local function mainLoop()
     guiLog("▶ Farming started!", COLORS.green)
 
     while STATE.running do
-        -- Extra safety check at the start of every cycle
-        if not STATE.running then break end
-
         if SETTINGS.AUTO_EQUIP_ABYSSAL then
             if rootPart and rootPart.Parent and not rootPart:FindFirstChild("FishSpin") then
                 autoEquipAbyssal()
@@ -1106,112 +1025,55 @@ local function mainLoop()
         if #eggs == 0 then
             STATE.currentTarget = "Searching for eggs..."
             updateGUI()
+            guiLog("No eggs found, scanning...", COLORS.textDim)
             task.wait(SETTINGS.SEARCH_INTERVAL)
         else
             guiLog("Eggs found: " .. #eggs, COLORS.accent)
             for i, egg in ipairs(eggs) do
-                if not STATE.running then break end   -- Critical check
+                if not STATE.running then break end
                 if egg.part and egg.part.Parent then
                     moveToEgg(egg)
                     task.wait(0.3)
                 end
             end
-            if not STATE.running then break end
             task.wait(SETTINGS.SEARCH_INTERVAL)
         end
     end
 
     STATE.currentTarget = "—"
+    STATE.status = "Stopped"
     updateGUI()
-    guiLog("⏸ Farming stopped (Player detected)", COLORS.red)
+    guiLog("⏸ Farming stopped", COLORS.red)
 end
--- ==================== AUTO START + SOLO PROTECTION + CURRENT SERVER REJOIN ====================
 
--- Force auto-start every time the script runs (including after rejoin)
+-- Auto-start on script load + Player monitoring + Hourly rejoin
 task.spawn(function()
-    task.wait(4)
+    task.wait(3) -- small delay for loading
     guiLog("🔄 Auto-starting egg farm...", COLORS.accent)
     STATE.running = true
     updateGUI()
     task.spawn(mainLoop)
 end)
 
--- Rejoin current server every 1 hour + retry every 5 seconds if needed
-local lastRejoinTime = tick()
-local rejoinInProgress = false
-local REJOIN_INTERVAL = 3600  -- 1 hour
-
-local function attemptRejoin()
-    if rejoinInProgress then return end
-    rejoinInProgress = true
-    
-    guiLog("⏰ Rejoin timer reached - Restarting current server...", COLORS.orange)
-    STATE.running = false
-    updateGUI()
-    task.wait(2)
-    
-    local success, err = pcall(function()
-        TeleportService:Teleport(game.PlaceId, player)
-    end)
-    
-    if not success then
-        guiLog("❌ Rejoin failed: " .. tostring(err), COLORS.red)
-        print("Rejoin error:", err)
-    else
-        guiLog("✅ Rejoin initiated - Returning to current server", COLORS.green)
-    end
-    
-    rejoinInProgress = false
-end
-
 RunService.Heartbeat:Connect(function()
     checkPlayers()
     
-    -- Main hourly timer
-    if tick() - lastRejoinTime >= REJOIN_INTERVAL then
-        lastRejoinTime = tick()
-        attemptRejoin()
-    end
-end)
-
--- Retry every 5 seconds while rejoin is pending (after hourly trigger)
-task.spawn(function()
-    while true do
-        task.wait(5)
-        checkPlayers()
+    -- Hourly rejoin (every 60 minutes) to fix memory leaks
+    if tick() - lastRejoinTime >= 3600 then
+        guiLog("⏰ Hourly rejoin triggered - Restarting server...", COLORS.orange)
+        STATE.running = false
+        updateGUI()
+        task.wait(2)  -- Give time to stop cleanly
         
-        -- If more than 1 hour has passed and we're still here, keep retrying
-        if tick() - lastRejoinTime >= REJOIN_INTERVAL then
-            attemptRejoin()
-        end
+        lastRejoinTime = tick()
+        
+        pcall(function()
+            -- More reliable rejoin method
+            TeleportService:TeleportAsync(game.PlaceId, {player})
+        end)
     end
 end)
 
-Players.PlayerAdded:Connect(checkPlayers)
-Players.PlayerRemoving:Connect(checkPlayers)
-
--- Manual buttons
-startBtn.MouseButton1Click:Connect(function()
-    if STATE.running then return end
-    STATE.running = true
-    updateGUI()
-    TweenService:Create(startBtn, TweenInfo.new(0.1), {BackgroundTransparency = 0.5}):Play()
-    task.wait(0.1)
-    TweenService:Create(startBtn, TweenInfo.new(0.1), {BackgroundTransparency = 0}):Play()
-    task.spawn(mainLoop)
-end)
-
-stopBtn.MouseButton1Click:Connect(function()
-    if not STATE.running then return end
-    STATE.running = false
-    TweenService:Create(stopBtn, TweenInfo.new(0.1), {BackgroundTransparency = 0}):Play()
-    task.wait(0.1)
-    TweenService:Create(stopBtn, TweenInfo.new(0.1), {BackgroundTransparency = 0.4}):Play()
-    updateGUI()
-end)
-
-guiLog("✅ System loaded: Auto farm + Solo protection + Current server rejoin (1hr + 5s retry)", COLORS.green)
-updateGUI()
 -- Extra safety: force check every 5 seconds
 task.spawn(function()
     while true do
