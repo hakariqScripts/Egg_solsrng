@@ -75,21 +75,17 @@ local isAlone = true
 local function checkPlayers()
     local others = 0
     
-    -- Primary: Check real Player objects
+    -- Check real players
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Parent then
             others += 1
         end
     end
     
-    -- Backup: Check for any other characters in workspace
+    -- Backup: Check for other characters
     if others == 0 then
         for _, model in ipairs(workspace:GetChildren()) do
-            if model:IsA("Model") 
-               and model ~= character 
-               and model:FindFirstChild("Humanoid") 
-               and model:FindFirstChild("HumanoidRootPart") then
-                
+            if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
                 local plr = Players:GetPlayerFromCharacter(model)
                 if plr and plr ~= player then
                     others += 1
@@ -98,6 +94,52 @@ local function checkPlayers()
             end
         end
     end
+    
+    local shouldRun = (others == 0)
+    
+    if shouldRun ~= isAlone then
+        isAlone = shouldRun
+        
+        if not shouldRun then
+            -- === OTHER PLAYER DETECTED → FORCE STOP EVERYTHING ===
+            guiLog("🚫 OTHER PLAYER DETECTED - FORCE STOPPING ALL MOVEMENT", COLORS.red)
+            
+            STATE.running = false
+            
+            -- Hard stop pathfinding
+            pcall(function()
+                if pathAgent then pathAgent:Stop() end
+            end)
+            
+            -- Hard stop humanoid movement
+            pcall(function()
+                if humanoid then
+                    humanoid:MoveTo(rootPart.Position)   -- stop current MoveTo
+                    humanoid.WalkSpeed = 0
+                    humanoid.JumpPower = 0
+                    humanoid.PlatformStand = true
+                end
+            end)
+            
+            -- Extra physics stop
+            pcall(function()
+                if rootPart then
+                    rootPart.AssemblyLinearVelocity = Vector3.new(0, rootPart.AssemblyLinearVelocity.Y, 0)
+                end
+            end)
+            
+            updateGUI()
+        else
+            -- Server empty again → Resume
+            if not STATE.running then
+                guiLog("✅ Server empty again - Resuming farm", COLORS.green)
+                STATE.running = true
+                updateGUI()
+                task.spawn(mainLoop)
+            end
+        end
+    end
+end
     
     local shouldRun = (others == 0)
     
@@ -804,13 +846,33 @@ player.CharacterAdded:Connect(function()
 end)
 
 local function moveToEgg(egg)
+    -- Immediate exit if farm should be stopped
+    if not STATE.running then 
+        return false 
+    end
+    
     STATE.currentEggInstance = egg.instance
-    if not rootPart or not egg.part or not egg.part.Parent then return false end
+    
+    if not rootPart or not rootPart.Parent then 
+        return false 
+    end
+    
+    if not egg.part or not egg.part.Parent then 
+        return false 
+    end
+    
     if not pathAgent then
         guiLog("❌ SimplePath not loaded!", COLORS.red)
         return false
     end
 
+    -- Rest of your original code continues here...
+    guiLog("→ Walking to: " .. egg.name, COLORS.accentGlow)
+    
+    if SETTINGS.WALK_SPEED_BOOST > 0 and humanoid then
+        humanoid.WalkSpeed = SETTINGS.WALK_SPEED_BOOST
+    end
+    
     guiLog("→ Walking to: " .. egg.name, COLORS.accentGlow)
 
     if SETTINGS.WALK_SPEED_BOOST > 0 and humanoid then
