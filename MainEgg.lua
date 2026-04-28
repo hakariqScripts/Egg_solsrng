@@ -75,14 +75,14 @@ local isAlone = true
 local function checkPlayers()
     local others = 0
     
-    -- Check real players
+    -- Primary check: Real players
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Parent then
             others += 1
         end
     end
     
-    -- Backup: Check for other characters
+    -- Backup check: Other characters in workspace
     if others == 0 then
         for _, model in ipairs(workspace:GetChildren()) do
             if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
@@ -101,36 +101,27 @@ local function checkPlayers()
         isAlone = shouldRun
         
         if not shouldRun then
-            -- === OTHER PLAYER DETECTED → FORCE STOP EVERYTHING ===
-            guiLog("🚫 OTHER PLAYER DETECTED - FORCE STOPPING ALL MOVEMENT", COLORS.red)
+            -- OTHER PLAYER DETECTED → FORCE STOP
+            guiLog("🚫 OTHER PLAYER DETECTED - FORCE STOPPING FARM", COLORS.red)
             
             STATE.running = false
             
-            -- Hard stop pathfinding
             pcall(function()
                 if pathAgent then pathAgent:Stop() end
             end)
             
-            -- Hard stop humanoid movement
             pcall(function()
                 if humanoid then
-                    humanoid:MoveTo(rootPart.Position)   -- stop current MoveTo
+                    humanoid:MoveTo(rootPart.Position)
                     humanoid.WalkSpeed = 0
                     humanoid.JumpPower = 0
                     humanoid.PlatformStand = true
                 end
             end)
             
-            -- Extra physics stop
-            pcall(function()
-                if rootPart then
-                    rootPart.AssemblyLinearVelocity = Vector3.new(0, rootPart.AssemblyLinearVelocity.Y, 0)
-                end
-            end)
-            
             updateGUI()
         else
-            -- Server empty again → Resume
+            -- Alone again
             if not STATE.running then
                 guiLog("✅ Server empty again - Resuming farm", COLORS.green)
                 STATE.running = true
@@ -140,6 +131,12 @@ local function checkPlayers()
         end
     end
 end
+
+game:GetService("LogService").MessageOut:Connect(function(message, messageType)
+    if message:match("Invalid egg") and STATE.currentEggInstance then
+        ignoredEggs[STATE.currentEggInstance] = true
+    end
+end)
     
     local shouldRun = (others == 0)
     
