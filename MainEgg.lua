@@ -70,12 +70,7 @@ local STATE = {
 
 local ignoredEggs = setmetatable({}, {__mode = "k"})
 
--- AUTO FEATURES: Solo protection + Auto start + Hourly rejoin
 local isAlone = true
-local lastRejoinTime = tick()
-
-local isAlone = true
-local lastRejoinTime = tick()
 
 local function checkPlayers()
     local others = 0
@@ -91,19 +86,29 @@ local function checkPlayers()
         isAlone = shouldRun
         
         if isAlone then
-            -- Became alone → start farming
+            -- Alone again → Start farming
             if not STATE.running then
-                guiLog("✅ Alone in server - Starting farm", COLORS.green)
+                guiLog("✅ Server is empty again - Resuming farm", COLORS.green)
                 STATE.running = true
                 updateGUI()
                 task.spawn(mainLoop)
             end
         else
-            -- Other player detected → stop farming immediately
+            -- Someone joined → STOP farming immediately
             if STATE.running then
-                guiLog("🚫 Other player detected - Stopping farm", COLORS.red)
+                guiLog("🚫 Other player detected - Stopping farm NOW", COLORS.red)
                 STATE.running = false
                 updateGUI()
+                
+                -- Extra force stop for the current loop
+                pcall(function()
+                    if pathAgent then
+                        pathAgent:Stop()
+                    end
+                end)
+                if humanoid then
+                    humanoid:MoveTo(rootPart.Position)  -- stop movement
+                end
             end
         end
     end
@@ -1025,12 +1030,11 @@ local function mainLoop()
         if #eggs == 0 then
             STATE.currentTarget = "Searching for eggs..."
             updateGUI()
-            guiLog("No eggs found, scanning...", COLORS.textDim)
             task.wait(SETTINGS.SEARCH_INTERVAL)
         else
             guiLog("Eggs found: " .. #eggs, COLORS.accent)
             for i, egg in ipairs(eggs) do
-                if not STATE.running then break end
+                if not STATE.running then break end        -- Important check
                 if egg.part and egg.part.Parent then
                     moveToEgg(egg)
                     task.wait(0.3)
@@ -1041,9 +1045,8 @@ local function mainLoop()
     end
 
     STATE.currentTarget = "—"
-    STATE.status = "Stopped"
     updateGUI()
-    guiLog("⏸ Farming stopped", COLORS.red)
+    guiLog("⏸ Farming stopped due to player detection", COLORS.red)
 end
 
 -- ==================== AUTO START + SOLO PROTECTION + CURRENT SERVER REJOIN ====================
