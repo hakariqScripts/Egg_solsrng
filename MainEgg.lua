@@ -605,7 +605,7 @@ CloseBtn.AutoButtonColor = false
 CloseBtn.Parent = MainBar
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
 
--- Рисуем X из двух наклонных линий
+-- Рисуем X из двух наклонных линий <-- tacobell ass language (cant hate cause im polish)
 local function makeXLine(rotation)
     local line = Instance.new("Frame")
     line.Size = UDim2.new(0, 16, 0, 2)
@@ -1209,8 +1209,8 @@ createSettingsToggle(228, "Use Biome Randomizer", "AUTO_USE_BIOME_RANDOMIZER")
 createSettingsSlider(270, "Use Interval (m)", 1, 60, "ITEM_USE_INTERVAL")
 createSettingsSlider(186, "Collect Dist", 2, 12, "PROMPT_DISTANCE")
 
-createRejoinMinutesInput(420, "Auto Rejoin (minutes)", "AUTO_REJOIN_MINUTES", "Enter Rejoin Time...")
-createRejoinMinutesInput(420, "Reset Character", "RESET_MINUTES", "Enter Reset Time...")
+createRejoinMinutesInput(420, "Auto Rejoin (minutes) (fix ram leak)", "AUTO_REJOIN_MINUTES", "Enter Rejoin Time...")
+createRejoinMinutesInput(420, "Reset Character (minutes)", "RESET_MINUTES", "Enter Reset Time...")
 
 createSectionHeader(232, "\u{2728}  Aura Notifications")
 createSettingsToggle(258, "Aura Roll Alerts", "AURA_NOTIFY_ENABLED")
