@@ -57,8 +57,8 @@ local Config = {
     ITEM_USE_INTERVAL = 20,  -- minutes
     AUTO_REJOIN_MINUTES = 0,        -- 0 = disabled
     REJOIN_AFTER_START = true,      -- Auto enable farm after rejoin
-    Config.RESET_MINUTES = 0,
-    -- Webhooks
+    RESET_MINUTES = 0,
+    
     WEBHOOK_URL = "",
     WEBHOOK_WEATHER = "",
     WEBHOOK_RARE_EGGS = "",
@@ -3773,32 +3773,33 @@ task.spawn(function()
     end
 end)
 
+--// CHARACTER RESET SYSTEM (Live Update Supported)
 task.spawn(function()
     while true do
         local minutes = tonumber(Config.RESET_MINUTES) or 0
-        
-        if Config.Enabled and minutes > 0 then
-            task.wait(minutes * 60)   -- Wait the configured minutes
-            
-            local Player = Players.LocalPlayer
-            warn("[Reset] Resetting character after", minutes, "minutes")
 
-            -- New reset logic (kills character instead of rejoining)
+        if Config.Enabled and minutes > 0 then
+            warn(string.format("[Reset] Character will reset in %d minute(s)", minutes))
+
+            task.wait(minutes * 60)
+
             pcall(function()
-                if Player.Character then
-                    local humanoid = Player.Character:FindFirstChildWhichIsA("Humanoid")
-                    if humanoid then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                local char = Player.Character
+                if char then
+                    local hum = char:FindFirstChildWhichIsA("Humanoid")
+                    if hum and hum.Health > 0 then
+                        hum:ChangeState(Enum.HumanoidStateType.Dead)
+                        warn("[Reset] Character reset via Humanoid:Dead")
                     else
-                        Player.Character:BreakJoints()
+                        char:BreakJoints()
+                        warn("[Reset] Character reset via BreakJoints")
                     end
                 end
             end)
 
-            warn("[Reset] Character reset attempted")
-            
+            task.wait(2) -- give time to respawn before next cycle
         else
-            task.wait(5)  -- idle wait if disabled
+            task.wait(5)
         end
     end
 end)
