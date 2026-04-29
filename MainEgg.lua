@@ -57,6 +57,7 @@ local Config = {
     ITEM_USE_INTERVAL = 20,  -- minutes
     AUTO_REJOIN_MINUTES = 0,        -- 0 = disabled
     REJOIN_AFTER_START = true,      -- Auto enable farm after rejoin
+    Config.RESET_MINUTES = 0,
     -- Webhooks
     WEBHOOK_URL = "",
     WEBHOOK_WEATHER = "",
@@ -1209,6 +1210,7 @@ createSettingsSlider(270, "Use Interval (m)", 1, 60, "ITEM_USE_INTERVAL")
 createSettingsSlider(186, "Collect Dist", 2, 12, "PROMPT_DISTANCE")
 
 createRejoinMinutesInput(420, "Auto Rejoin (minutes)", "AUTO_REJOIN_MINUTES", "Enter Rejoin Time...")
+createRejoinMinutesInput(420, "Reset Character", "RESET_MINUTES", "Enter Reset Time...")
 
 createSectionHeader(232, "\u{2728}  Aura Notifications")
 createSettingsToggle(258, "Aura Roll Alerts", "AURA_NOTIFY_ENABLED")
@@ -3767,6 +3769,36 @@ task.spawn(function()
             end
         else
             task.wait(5) -- small idle wait if disabled
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        local minutes = tonumber(Config.RESET_MINUTES) or 0
+        
+        if Config.Enabled and minutes > 0 then
+            task.wait(minutes * 60)   -- Wait the configured minutes
+            
+            local Player = Players.LocalPlayer
+            warn("[Reset] Resetting character after", minutes, "minutes")
+
+            -- New reset logic (kills character instead of rejoining)
+            pcall(function()
+                if Player.Character then
+                    local humanoid = Player.Character:FindFirstChildWhichIsA("Humanoid")
+                    if humanoid then
+                        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                    else
+                        Player.Character:BreakJoints()
+                    end
+                end
+            end)
+
+            warn("[Reset] Character reset attempted")
+            
+        else
+            task.wait(5)  -- idle wait if disabled
         end
     end
 end)
