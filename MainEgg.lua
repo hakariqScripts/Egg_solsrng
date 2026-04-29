@@ -3741,39 +3741,44 @@ end
 ---------------------------------------
 -- SIMPLE AUTO REJOIN
 ---------------------------------------
-
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
 task.spawn(function()
     while true do
         local minutes = tonumber(Config.AUTO_REJOIN_MINUTES) or 0
-
+        
         if Config.Enabled and minutes > 0 then
+            warn(string.format("[Rejoin] Next rejoin in %d minute(s)", minutes))
+            
+            -- Wait the configured time
             task.wait(minutes * 60)
 
             local Player = Players.LocalPlayer
             local PlaceId = game.PlaceId
             local JobId = game.JobId
 
-            warn("[Rejoin] Rejoining after", minutes, "minutes")
+            warn("[Rejoin] Rejoining server now...")
 
             if #Players:GetPlayers() <= 1 then
                 Player:Kick("Rejoining...")
-                task.wait()
+                task.wait(0.5)
                 TeleportService:Teleport(PlaceId, Player)
             else
                 pcall(function()
                     TeleportService:TeleportToPlaceInstance(PlaceId, JobId, Player)
                 end)
             end
+
         else
-            task.wait(5) -- small idle wait if disabled
+            task.wait(5) -- idle wait when disabled or set to 0
         end
     end
 end)
 
---// CHARACTER RESET SYSTEM (Live Update Supported)
+---------------------------------------
+-- SIMPLE RESET
+---------------------------------------
 task.spawn(function()
     while true do
         local minutes = tonumber(Config.RESET_MINUTES) or 0
